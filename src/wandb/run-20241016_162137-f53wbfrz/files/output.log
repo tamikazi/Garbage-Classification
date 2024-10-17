@@ -1,0 +1,53 @@
+                                          image_path  \
+0  data/enel645_2024f/garbage_data/CVPR_2024_data...
+1  data/enel645_2024f/garbage_data/CVPR_2024_data...
+2  data/enel645_2024f/garbage_data/CVPR_2024_data...
+3  data/enel645_2024f/garbage_data/CVPR_2024_data...
+4  data/enel645_2024f/garbage_data/CVPR_2024_data...
+
+                 text_description  label
+0  acne_treatment_ointment_tube_0  Black
+1              Aero_bar_wrapper_1  Black
+2       air_freshener_container_2  Black
+3                  almonds_sack_4  Black
+4            aloe_vera_gel_tube_5  Black
+                                          image_path        text_description  \
+0  data/enel645_2024f/garbage_data/CVPR_2024_data...  air_freshener_refill_3
+1  data/enel645_2024f/garbage_data/CVPR_2024_data...             apple pouch
+2  data/enel645_2024f/garbage_data/CVPR_2024_data...       a_bag_of_chips_22
+3  data/enel645_2024f/garbage_data/CVPR_2024_data...          babybel_wax_30
+4  data/enel645_2024f/garbage_data/CVPR_2024_data...          babybel_wax_31
+
+   label
+0  Black
+1  Black
+2  Black
+3  Black
+4  Black
+                                          image_path  \
+0  data/enel645_2024f/garbage_data/CVPR_2024_data...
+1  data/enel645_2024f/garbage_data/CVPR_2024_data...
+2  data/enel645_2024f/garbage_data/CVPR_2024_data...
+3  data/enel645_2024f/garbage_data/CVPR_2024_data...
+4  data/enel645_2024f/garbage_data/CVPR_2024_data...
+
+                    text_description  label
+0                  Air_Freshener_915  Black
+1  aluminum_and_plastic_chip_bag_105  Black
+2            aluminum_bottle_cap_106  Black
+3                     bacon_bag_1080  Black
+4                     badge_pin_1556  Black
+torch.Size([3, 224, 224])
+torch.Size([32])
+tensor(2)
+torch.Size([3, 224, 224])
+torch.Size([32])
+tensor(2)
+c:\Users\tahmi\anaconda3\envs\enel-645\lib\site-packages\torchvision\models\_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+c:\Users\tahmi\anaconda3\envs\enel-645\lib\site-packages\torchvision\models\_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=None`.
+  warnings.warn(msg)
+C:\Users\tahmi\AppData\Local\Temp\ipykernel_45148\1557173756.py:5: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()  # Gradient scaler for mixed precision training
+Epoch 1/10
+----------

@@ -1,0 +1,54 @@
+2024-10-16 17:30:17,309 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Current SDK version is 0.18.3
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Configure stats pid to 38776
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Loading settings from C:\Users\tahmi\.config\wandb\settings
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Loading settings from c:\Users\tahmi\Documents\MENG2023\ENEL645\Garbage-Classification\src\wandb\settings
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Loading settings from environment variables: {}
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Applying setup settings: {'mode': None, '_disable_service': None}
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Inferring run settings from compute environment: {'program': '<python with no main file>'}
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_setup.py:_flush():79] Applying login settings: {}
+2024-10-16 17:30:17,310 INFO    MainThread:38776 [wandb_init.py:_log_setup():532] Logging user logs to c:\Users\tahmi\Documents\MENG2023\ENEL645\Garbage-Classification\src\wandb\run-20241016_173017-4c5tibvf\logs\debug.log
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:_log_setup():533] Logging internal logs to c:\Users\tahmi\Documents\MENG2023\ENEL645\Garbage-Classification\src\wandb\run-20241016_173017-4c5tibvf\logs\debug-internal.log
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:_jupyter_setup():478] configuring jupyter hooks <wandb.sdk.wandb_init._WandbInit object at 0x0000022638A04970>
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:init():617] calling init triggers
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:init():624] wandb.init called with sweep_config: {}
+config: {}
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:init():667] starting backend
+2024-10-16 17:30:17,311 INFO    MainThread:38776 [wandb_init.py:init():671] sending inform_init request
+2024-10-16 17:30:17,313 INFO    MainThread:38776 [backend.py:_multiprocessing_setup():104] multiprocessing start_methods=spawn, using: spawn
+2024-10-16 17:30:17,314 INFO    MainThread:38776 [wandb_init.py:init():684] backend started and connected
+2024-10-16 17:30:17,323 INFO    MainThread:38776 [wandb_run.py:_label_probe_notebook():1346] probe notebook
+2024-10-16 17:30:17,324 INFO    MainThread:38776 [wandb_init.py:init():779] updated telemetry
+2024-10-16 17:30:17,633 INFO    MainThread:38776 [wandb_init.py:init():812] communicating run to backend with 90.0 second timeout
+2024-10-16 17:30:17,860 INFO    MainThread:38776 [wandb_init.py:init():863] starting run threads in backend
+2024-10-16 17:30:18,073 INFO    MainThread:38776 [wandb_run.py:_console_start():2465] atexit reg
+2024-10-16 17:30:18,073 INFO    MainThread:38776 [wandb_run.py:_redirect():2313] redirect: wrap_raw
+2024-10-16 17:30:18,074 INFO    MainThread:38776 [wandb_run.py:_redirect():2378] Wrapping output streams.
+2024-10-16 17:30:18,074 INFO    MainThread:38776 [wandb_run.py:_redirect():2403] Redirects installed.
+2024-10-16 17:30:18,075 INFO    MainThread:38776 [wandb_init.py:init():907] run started, returning control to user process
+2024-10-16 17:30:18,076 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,076 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,097 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,098 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,098 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,115 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,200 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,200 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,227 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,230 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,230 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,266 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,365 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,366 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,378 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,866 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,866 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,888 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,889 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,890 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,901 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:18,902 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:18,902 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:18,919 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend
+2024-10-16 17:30:19,805 INFO    MainThread:38776 [jupyter.py:save_ipynb():387] not saving jupyter notebook
+2024-10-16 17:30:19,805 INFO    MainThread:38776 [wandb_init.py:_pause_backend():443] pausing backend
+2024-10-16 17:30:19,829 INFO    MainThread:38776 [wandb_init.py:_resume_backend():448] resuming backend

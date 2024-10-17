@@ -1,0 +1,51 @@
+{"time":"2024-10-16T16:38:34.8045361-06:00","level":"INFO","msg":"using version","core version":"0.18.3"}
+{"time":"2024-10-16T16:38:34.8045361-06:00","level":"INFO","msg":"created symlink","path":"c:\\Users\\tahmi\\Documents\\MENG2023\\ENEL645\\Garbage-Classification\\src\\wandb\\run-20241016_163834-2dixrasq\\logs\\debug-core.log"}
+{"time":"2024-10-16T16:38:34.8062651-06:00","level":"ERROR","msg":"dialing: google: could not find default credentials. See https://cloud.google.com/docs/authentication/external/set-up-adc for more information"}
+{"time":"2024-10-16T16:38:34.8442504-06:00","level":"INFO","msg":"created new stream","id":"2dixrasq"}
+{"time":"2024-10-16T16:38:34.8447697-06:00","level":"INFO","msg":"handler: started","stream_id":{"value":"2dixrasq"}}
+{"time":"2024-10-16T16:38:34.8447697-06:00","level":"INFO","msg":"sender: started","stream_id":{"value":"2dixrasq"}}
+{"time":"2024-10-16T16:38:34.8447697-06:00","level":"INFO","msg":"stream: started","id":"2dixrasq"}
+{"time":"2024-10-16T16:38:34.8447697-06:00","level":"INFO","msg":"writer: Do: started","stream_id":{"value":"2dixrasq"}}
+{"time":"2024-10-16T16:38:35.1612783-06:00","level":"INFO","msg":"wandb-core","!BADKEY":null}
+{"time":"2024-10-16T16:38:35.1635712-06:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2024-10-16T16:38:35.4447306-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:38:37.810104-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:38:37.8115098-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:38:38.8381721-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:38:38.9797423-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:38:45.6766103-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:38:45.6782609-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:38:48.6850827-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:38:48.9004817-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:38:50.8109107-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:38:51.2957245-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:39:02.3576251-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:39:02.3592425-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:39:08.7679507-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:39:15.1647123-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:39:21.4669212-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:39:40.1054928-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:39:40.2035686-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:41:18.3090203-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:41:19.4103721-06:00","level":"INFO","msg":"Pausing system monitor"}
+{"time":"2024-10-16T16:43:00.3780531-06:00","level":"INFO","msg":"Resuming system monitor"}
+{"time":"2024-10-16T16:43:05.1641101-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:43:15.1638397-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:43:25.1641353-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:43:35.1637564-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:43:45.1638601-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:43:55.1638741-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:05.1638745-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:15.1639601-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:25.1640518-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:35.1638174-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:45.1644391-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:44:55.1639553-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:05.164254-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:15.1644206-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:25.1646484-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:35.1638658-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:45.164502-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:45:55.1643656-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:46:05.1642643-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
+{"time":"2024-10-16T16:46:15.1640156-06:00","level":"ERROR","msg":"monitor: disk: error sampling metrics: Incorrect function."}
