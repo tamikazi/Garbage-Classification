@@ -28,23 +28,24 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(device)
 
 # define static global variables
+class_names = ['Green', 'Blue', 'Black', 'TTR']
+num_classes = len(class_names)
 
 '''trainset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Train'
 valset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Val'
 testset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Test'
 '''
 
-trainset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Train'
+'''trainset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Train'
 valset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Val'
 testset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Test'
+'''
 
+# define learning rates
 initial_learning_rate = 0.001
-fine_tuning_learning_rate = 0.0001  # Smaller learning rate for fine-tuning
+fine_tuning_learning_rate = 0.0001  # smaller learning rate for fine-tuning
 
-class_names = ['Green', 'Blue', 'Black', 'TTR']
-num_classes = len(class_names)
-
-# global mapping variables
+# global class to index mapping variables
 class_to_idx = {class_name: idx for idx, class_name in enumerate(class_names)}
 idx_to_class = {idx: class_name for idx, class_name in enumerate(class_names)}
 
@@ -487,7 +488,7 @@ def test_model(model, testloader, testset, device):
 
 if __name__ == '__main__':
     # init
-    batch_size = 2
+    batch_size = 32
     num_workers = 4
 
     run = wandb.init(project='garbage-collection')
@@ -521,7 +522,7 @@ if __name__ == '__main__':
     class_weights = compute_class_weight('balanced', classes=np.unique(trainset_df['label']), y=trainset_df['label'])
     class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
 
-    # initialize the model anf freeze the desired layers
+    # initialize the model and freeze the desired layers
     model = GarbageClassifier(num_classes=len(class_names)).to(device)
 
     # freeze all ResNet layers and unfreeze the last ResNet block
@@ -540,7 +541,7 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=initial_learning_rate)
 
-    num_epochs = 1
+    num_epochs = 25
     wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
 
     best_val_acc = 0.0  # Variable to track the best validation accuracy
@@ -559,7 +560,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        '''wandb.log({
+        wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -572,7 +573,7 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })'''
+        })
 
         if val_acc_combined > best_val_acc:
             best_val_acc = val_acc_combined
@@ -607,7 +608,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        '''wandb.log({
+        wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -620,7 +621,7 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })'''
+        })
 
         if val_acc_combined > best_val_acc_fine_tuning:
             best_val_acc_fine_tuning = val_acc_combined
