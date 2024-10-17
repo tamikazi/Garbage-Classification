@@ -41,6 +41,10 @@ valset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification
 testset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Test'
 '''
 
+trainset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Train"
+valset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Val"
+testset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Test"
+
 # define learning rates
 initial_learning_rate = 0.001
 fine_tuning_learning_rate = 0.0001  # smaller learning rate for fine-tuning
@@ -491,7 +495,7 @@ if __name__ == '__main__':
     batch_size = 32
     num_workers = 4
 
-    run = wandb.init(project='garbage-collection')
+    #run = wandb.init(project='garbage-collection')
 
     # initialize the transforms
     torchvision_transform = transforms.Compose([transforms.Resize((224,224)),\
@@ -502,9 +506,9 @@ if __name__ == '__main__':
         transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406] ,std=[0.229, 0.224, 0.225])])
 
     # extract the data
-    trainset_df = extract_data_from_folders(trainset_dir)[1:1000]
-    valset_df = extract_data_from_folders(valset_dir)[1:1000]
-    testset_df = extract_data_from_folders(testset_dir)[1:1000]
+    trainset_df = extract_data_from_folders(trainset_dir)
+    valset_df = extract_data_from_folders(valset_dir)
+    testset_df = extract_data_from_folders(testset_dir)
 
     # transform and normalize the training, validation, and testing data
     trainset = GarbageDataset(trainset_df, image_transform=torchvision_transform, class_to_idx=class_to_idx)
@@ -542,12 +546,12 @@ if __name__ == '__main__':
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=initial_learning_rate)
 
     num_epochs = 25
-    wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
+    #wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
 
     best_val_acc = 0.0  # Variable to track the best validation accuracy
 
     # Main training loop
-    for epoch in range(wandb.config['epochs']):
+    for epoch in range(num_epochs):
         print(f'Epoch {epoch + 1}/{num_epochs}')
         print('-' * 10)
 
@@ -560,7 +564,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        wandb.log({
+        '''wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -573,14 +577,14 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })
+        })'''
 
         if val_acc_combined > best_val_acc:
             best_val_acc = val_acc_combined
             print(f"New best model found! Saving model with validation accuracy: {best_val_acc:.4f}")
-            torch.save(model.state_dict(), 'best_garbage_model.pth') 
+            torch.save(model.state_dict(), './best_garbage_model.pth') 
 
-    model.load_state_dict(torch.load('best_garbage_model.pth'))  # Load the best model from the initial training
+    model.load_state_dict(torch.load('./best_garbage_model.pth'))  # Load the best model from the initial training
 
     # Unfreeze the desired layers for fine-tuning
     for param in model.resnet.parameters():
@@ -590,12 +594,12 @@ if __name__ == '__main__':
         param.requires_grad = True
 
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=fine_tuning_learning_rate)
-    wandb.config.update({"fine_tuning_epochs": num_epochs, "fine_tuning_learning_rate": fine_tuning_learning_rate})
+    #wandb.config.update({"fine_tuning_epochs": num_epochs, "fine_tuning_learning_rate": fine_tuning_learning_rate})
 
     best_val_acc_fine_tuning = 0.0
 
     # Fine training loop
-    for epoch in range(wandb.config['epochs']):
+    for epoch in range(num_epochs):
         print(f'Epoch {epoch + 1}/{num_epochs}')
         print('-' * 10)
 
@@ -608,7 +612,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        wandb.log({
+        '''wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -621,13 +625,13 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })
+        })'''
 
         if val_acc_combined > best_val_acc_fine_tuning:
             best_val_acc_fine_tuning = val_acc_combined
             print(f"New best model found! Saving model with validation accuracy: {best_val_acc:.4f}")
-            torch.save(model.state_dict(), 'best_garbage_model.pth') 
+            torch.save(model.state_dict(), './best_garbage_model.pth') 
         
-    model.load_state_dict(torch.load('best_garbage_model.pth'))
+    model.load_state_dict(torch.load('./best_garbage_model.pth'))
     test_accuracy = test_model(model, testloader, testset, device)
-    wandb.log({"Test Accuracy": test_accuracy})
+    #wandb.log({"Test Accuracy": test_accuracy})
