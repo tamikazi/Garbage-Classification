@@ -495,7 +495,7 @@ if __name__ == '__main__':
     batch_size = 32
     num_workers = 4
 
-    #run = wandb.init(project='garbage-collection')
+    run = wandb.init(project='garbage-collection')
 
     # initialize the transforms
     torchvision_transform = transforms.Compose([transforms.Resize((224,224)),\
@@ -546,12 +546,12 @@ if __name__ == '__main__':
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=initial_learning_rate)
 
     num_epochs = 25
-    #wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
+    wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
 
     best_val_acc = 0.0  # Variable to track the best validation accuracy
 
     # Main training loop
-    for epoch in range(num_epochs):
+    for epoch in range(wandb.config['epochs']):
         print(f'Epoch {epoch + 1}/{num_epochs}')
         print('-' * 10)
 
@@ -564,7 +564,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        '''wandb.log({
+        wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -577,7 +577,7 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })'''
+        })
 
         if val_acc_combined > best_val_acc:
             best_val_acc = val_acc_combined
@@ -594,12 +594,12 @@ if __name__ == '__main__':
         param.requires_grad = True
 
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=fine_tuning_learning_rate)
-    #wandb.config.update({"fine_tuning_epochs": num_epochs, "fine_tuning_learning_rate": fine_tuning_learning_rate})
+    wandb.config.update({"fine_tuning_epochs": num_epochs, "fine_tuning_learning_rate": fine_tuning_learning_rate})
 
     best_val_acc_fine_tuning = 0.0
 
     # Fine training loop
-    for epoch in range(num_epochs):
+    for epoch in range(wandb.config['epochs']):
         print(f'Epoch {epoch + 1}/{num_epochs}')
         print('-' * 10)
 
@@ -612,7 +612,7 @@ if __name__ == '__main__':
         val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
 
         # Log results
-        '''wandb.log({
+        wandb.log({
             "Training Loss (Image)": epoch_loss_image, 
             "Training Accuracy (Image)": epoch_acc_image,
             "Training Loss (Text)": epoch_loss_text, 
@@ -625,7 +625,7 @@ if __name__ == '__main__':
             "Validation Accuracy (Text)": val_acc_text,
             "Validation Loss (Combined)": val_loss_combined, 
             "Validation Accuracy (Combined)": val_acc_combined
-        })'''
+        })
 
         if val_acc_combined > best_val_acc_fine_tuning:
             best_val_acc_fine_tuning = val_acc_combined
@@ -634,4 +634,4 @@ if __name__ == '__main__':
         
     model.load_state_dict(torch.load('./best_garbage_model.pth'))
     test_accuracy = test_model(model, testloader, testset, device)
-    #wandb.log({"Test Accuracy": test_accuracy})
+    wandb.log({"Test Accuracy": test_accuracy})
