@@ -626,8 +626,8 @@ if __name__ == '__main__':
         if val_acc_combined > best_val_acc_fine_tuning:
             best_val_acc_fine_tuning = val_acc_combined
             print(f"New best model found! Saving model with validation accuracy: {best_val_acc:.4f}")
-            torch.save(model.state_dict(), 'best_fine_tuned_garbage_model.pth') 
+            torch.save(model.state_dict(), 'best_garbage_model.pth') 
         
-    model.load_state_dict(torch.load('best_fine_tuned_garbage_model.pth'))
+    model.load_state_dict(torch.load('best_garbage_model.pth'))
     test_accuracy = test_model(model, testloader, testset, device)
     wandb.log({"Test Accuracy": test_accuracy})

@@ -1,9 +1,0 @@
-{"time":"2024-10-16T22:16:20.4682793-06:00","level":"INFO","msg":"using version","core version":"0.18.3"}
-{"time":"2024-10-16T22:16:20.4682793-06:00","level":"INFO","msg":"created symlink","path":"C:\\Users\\Shaakira Gadiwan\\Documents\\enel645\\Garbage-Classification\\wandb\\offline-run-20241016_221620-gs2e3d3f\\logs\\debug-core.log"}
-{"time":"2024-10-16T22:16:20.4772697-06:00","level":"INFO","msg":"created new stream","id":"gs2e3d3f"}
-{"time":"2024-10-16T22:16:20.4772697-06:00","level":"INFO","msg":"stream: started","id":"gs2e3d3f"}
-{"time":"2024-10-16T22:16:20.4772697-06:00","level":"INFO","msg":"writer: Do: started","stream_id":{"value":"gs2e3d3f"}}
-{"time":"2024-10-16T22:16:20.4772697-06:00","level":"INFO","msg":"sender: started","stream_id":{"value":"gs2e3d3f"}}
-{"time":"2024-10-16T22:16:20.4772697-06:00","level":"INFO","msg":"handler: started","stream_id":{"value":"gs2e3d3f"}}
-{"time":"2024-10-16T22:16:20.4882594-06:00","level":"INFO","msg":"wandb-core","!BADKEY":null}
-{"time":"2024-10-16T22:16:20.4894253-06:00","level":"INFO","msg":"Starting system monitor"}
