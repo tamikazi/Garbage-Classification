@@ -28,17 +28,13 @@ from sklearn.metrics import (
 
 import wandb
 
-# from huggingface_hub import hf_hub_download
-# from sam2.build_sam import build_sam2
-# from sam2.sam2_image_predictor import SAM2ImagePredictor
-
 # Initialize wandb with project settings
 wandb.init(
     project='garbage-collection',
     config={
         "epochs": 10,
         "batch_size": 512,
-        "learning_rate": 0.0001,
+        "learning_rate": 0.001,
         "max_len": 32,
         "optimizer": "Adam",
         "model_architecture": "ResNet50+BERT",
@@ -51,13 +47,6 @@ config = wandb.config
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(f'Using device: {device}')
 
-# hf_hub_download(repo_id = "merve/sam2-hiera-large", filename="sam2_hiera_large.pt", local_dir = "./")
-# sam2_checkpoint = "../checkpoints/sam2_hiera_large.pt"
-# model_cfg = "sam2_hiera_l.yaml"
-
-# sam2_model = build_sam2(model_cfg, sam2_checkpoint, device=device, apply_postprocessing=False)
-# # Initialize the predictor
-# sam2_predictor = SAM2ImagePredictor(sam2_model)
 
 trainset_dir = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Train'
 valset_dir = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Val'
@@ -95,8 +84,6 @@ class GarbageDataset(Dataset):
         self.max_len = max_len
         self.class_to_idx = class_to_idx
 
-        # Initialize the SAM2 predictor
-        # self.sam2_predictor = sam2_predictor
 
     def __len__(self):
         return len(self.dataframe)
@@ -109,13 +96,6 @@ class GarbageDataset(Dataset):
 
         # Load and preprocess the image
         image = Image.open(img_path).convert("RGB")
-
-        # Use SAM2 to predict the bounding box
-        # mask = self.generate_mask(image)
-
-        # Apply the mask to the image
-        # image = self.apply_mask(image, mask)
-
 
         if self.image_transform:
             image = self.image_transform(image)
@@ -140,33 +120,6 @@ class GarbageDataset(Dataset):
             'label': torch.tensor(numeric_label, dtype=torch.long),
             'text_description': text_desc  # For logging misclassified examples
         }
-    
-    # def generate_mask(self, image):
-    #     # Convert PIL image to numpy array
-    #     image_np = np.array(image)
-
-    #     # Set the image for the predictor
-    #     self.sam2_predictor.set_image(image_np)
-
-    #     # Define a default box covering the entire image
-    #     h, w = image_np.shape[:2]
-    #     box = [0, 0, w, h]
-
-    #     # Predict the bounding box
-    #     masks = self.sam2_predictor.predict(box=box, multimask_output=False)
-
-    #     # Get the mask
-    #     mask = masks[0]['segmentation']
-
-    #     return mask
-    
-    # def apply_mask(self, image, mask):
-    #     mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
-
-    #     image = Image.composite(image, Image.new('RGB', image.size), mask_pil)
-
-    #     return image
-
 
 
 # Define the image model using ResNet-50
