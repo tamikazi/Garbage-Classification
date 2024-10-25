@@ -119,7 +119,10 @@ class ImageModel(nn.Module):
         self.model.fc = nn.Identity()
         # Feature extractor to output a feature vector
         self.feature_extractor = nn.Sequential(
-            nn.Linear(2048, 512),
+            nn.Linear(2048, 1024),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Dropout(dropout_rate)
         )
@@ -422,7 +425,7 @@ def train():
         )
         valset = GarbageDataset(
             valset_df,
-            image_transform=transform_test,
+            image_transform=transform_train,
             class_to_idx=class_to_idx,
             tokenizer=tokenizer,
             max_len=32
@@ -479,8 +482,8 @@ def train():
             param.requires_grad = False
         # for param in model.image_model.model.layer3.parameters():
         #     param.requires_grad = True
-        # for param in model.image_model.model.layer4.parameters():
-        #     param.requires_grad = True
+        for param in model.image_model.model.layer4.parameters():
+            param.requires_grad = True
         for param in model.image_model.feature_extractor.parameters():
             param.requires_grad = True
 
@@ -494,7 +497,7 @@ def train():
         trainable_params = [
             # Image feature extractor
             # {params: model.image_model.model.layer3.parameters(), 'lr': config.learning_rate},
-            # {'params': model.image_model.model.layer4.parameters(), 'lr': config.learning_rate},
+            {'params': model.image_model.model.layer4.parameters(), 'lr': config.learning_rate * 0.1},
             {'params': model.image_model.feature_extractor.parameters(), 'lr': config.learning_rate},
             # Text model
             {'params': model.text_model.bert.parameters(), 'lr': config.learning_rate * 0.1},
@@ -606,7 +609,7 @@ def main():
     sweep_config = {
         'method': 'bayes',  # Options: 'grid', 'random', 'bayes'
         'metric': {
-            'name': 'Validation Combined Accuracy',
+            'name': 'Test Combined Accuracy',
             'goal': 'maximize'   
         },
         'parameters': {
@@ -614,8 +617,8 @@ def main():
                 'values': [16, 32, 64, 128, 256]
             },
             'learning_rate': {
-                'min': 0.00001,
-                'max': 0.0001
+                'min': 0.0001,
+                'max': 0.001
             },
             'dropout_rate': {
                 'min': 0.2,
