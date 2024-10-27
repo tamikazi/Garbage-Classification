@@ -14,6 +14,7 @@ import torch.optim as optim
 
 import torchvision
 from torchvision import transforms, models
+from torchvision.models import resnet50, ResNet50_Weights
 
 from transformers import BertTokenizer, BertModel
 from sklearn.utils.class_weight import compute_class_weight
@@ -114,7 +115,7 @@ class GarbageDataset(Dataset):
 class ImageModel(nn.Module):
     def __init__(self, dropout_rate=0.5):
         super(ImageModel, self).__init__()
-        self.model = models.resnet50(pretrained=True)
+        self.model = models.resnet50(weights=ResNet50_Weights.DEFAULT)
         # Remove the last classification layer
         self.model.fc = nn.Identity()
         # Feature extractor to output a feature vector
@@ -507,15 +508,18 @@ def train():
         ]
 
         # Initialize the optimizer
-        optimizer = optim.Adam(trainable_params, lr=config.learning_rate, weight_decay=1e-5)
+        optimizer = optim.Adam(trainable_params, lr=config.learning_rate, weight_decay=1e-4)
+
+        # Early stopping parameters
+        early_stopping_patience = 4
+        best_val_loss = float('inf')
+        epochs_no_improve = 0
 
         # Watch the model with wandb
         wandb.watch(model, log="all", log_freq=100)
 
-        best_val_acc = 0.0  # Variable to track the best validation accuracy
-
-        for epoch in range(10):  # Fixed epochs to 10
-            print(f'Epoch {epoch + 1}/10')
+        for epoch in range(20):  # Fixed epochs to 10
+            print(f'Epoch {epoch + 1}/20')
             print('-' * 10)
 
             # Training phase
@@ -550,19 +554,26 @@ def train():
                 "Validation F1-score": f1
             })
 
-            # Save the best model based on combined validation accuracy
-            if val_acc_combined > best_val_acc:
-                best_val_acc = val_acc_combined
+            # Early stopping
+            if val_loss_combined < best_val_loss:
+                best_val_loss = val_loss_combined
+                epochs_no_improve = 0
+                # Save the best model based on validation loss
                 print(f"New best model found! Saving model with validation "
-                      f"accuracy: {best_val_acc:.4f}")
+                      f"loss: {best_val_loss:.4f}")
                 torch.save(model.state_dict(), 'best_model.pth')
                 # Log model checkpoint as artifact
                 artifact = wandb.Artifact('best_model', type='model')
                 artifact.add_file('best_model.pth')
                 wandb.log_artifact(artifact)
+            else:
+                epochs_no_improve += 1
+                if epochs_no_improve >= early_stopping_patience:
+                    print(f'Early stopping at epoch {epoch + 1}')
+                    break
 
         # Load the best model and evaluate on the test set
-        model.load_state_dict(torch.load('best_model.pth'))
+        model.load_state_dict(torch.load('best_model.pth', wieghts_only=True))
 
         test_acc_combined, precision, recall, f1, misclassified_table, conf_mat = test(
             model, testloader, device, idx_to_class
@@ -622,7 +633,7 @@ def main():
             },
             'dropout_rate': {
                 'min': 0.2,
-                'max': 0.8
+                'max': 0.7
             }
             # Add more hyperparameters to tune if needed
         }
