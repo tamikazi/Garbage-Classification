@@ -1,117 +1,122 @@
-# pip install -r src/requirements.txt
-
 import os
-import wandb
+import re
+import random
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from PIL import Image
-import cv2
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 
 import torchvision
-from torchvision import transforms, datasets, models
+from torchvision import transforms, models
+from torchvision.models import resnet50, ResNet50_Weights
 
-from torchvision.models import resnet34
-
-from transformers import BertTokenizer
-from transformers import BertModel
-
+from transformers import BertTokenizer, BertModel
 from sklearn.utils.class_weight import compute_class_weight
-from skimage.transform import resize
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(device)
+# Initialize device
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print(f'Using device: {device}')
 
-# define static global variables
-class_names = ['Green', 'Blue', 'Black', 'TTR']
-num_classes = len(class_names)
+# static global variables
 
-'''trainset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Train'
-valset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Val'
-testset_dir = 'data/enel645_2024f/garbage_data/CVPR_2024_dataset_Test'
-'''
+# hyperparameters
+BATCH_SIZE = 16
+LEARNING_RATE = 0.0001
+DROPOUT_RATE = 0.2
 
-trainset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Train'
-valset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Val'
-testset_dir = 'C:/Users/Shaakira Gadiwan/Documents/enel645/Garbage-Classification/data/garbage_data/CVPR_2024_dataset_Test'
-
-'''trainset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Train"
-valset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Val"
-testset_dir = r"/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Test"'''
-
-# define learning rates
-initial_learning_rate = 0.001
-fine_tuning_learning_rate = 0.0001  # smaller learning rate for fine-tuning
+# dataset directories
+TRAINSET_DIR = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Train'
+VALSET_DIR = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Val'
+TESTSET_DIR = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Test'
 
 # global class to index mapping variables
+class_names = ['Green', 'Blue', 'Black', 'TTR']
 class_to_idx = {class_name: idx for idx, class_name in enumerate(class_names)}
-idx_to_class = {idx: class_name for idx, class_name in enumerate(class_names)}
+idx_to_class = {idx: class_name for class_name, idx in class_to_idx.items()}
 
-from torch.utils.data import Dataset
-from torchvision import transforms
-from transformers import BertTokenizer, BertModel
-import torch
-import torch.nn as nn
-import torchvision.models as models
-from PIL import Image
+# ---------------------------
+# Helper Functions and Classes
+# ---------------------------
 
-# custom dataset for garbage classification, combining image and text data
+def extract_data_from_folders(base_dir):
+    """Extract image paths, text descriptions, and labels from folders."""
+    data = []
+    # Traverse through each subfolder
+    for label_folder in os.listdir(base_dir):
+        folder_path = os.path.join(base_dir, label_folder)
+        # Check if it's a directory
+        if os.path.isdir(folder_path):
+            # Loop through each image file in the subfolder
+            for filename in os.listdir(folder_path):
+                if filename.endswith(('.jpg', '.png', '.jpeg')):  # Filter image files
+                    image_path = os.path.join(folder_path, filename)
+                    # Extract text from filename (remove file extension)
+                    text_description = os.path.splitext(filename)[0]
+                    # Append image path, text, and label to the data list
+                    text = text_description.replace('_', ' ')
+                    text_without_digits = re.sub(r'\d+', '', text).strip().lower()
+                    data.append({
+                        'image_path': image_path,
+                        'text_description': text_without_digits,
+                        'label': label_folder  # The subfolder name represents the label
+                    })
+    # Convert to DataFrame for easy manipulation
+    return pd.DataFrame(data)
+
 class GarbageDataset(Dataset):
-    def __init__(self, dataframe, image_transform=None, max_len=32, class_to_idx=None):
-        """
-        Initialize the GarbageDataset.
+    """Custom Dataset for Garbage Classification."""
 
-        Args:
-            dataframe (pd.DataFrame): DataFrame containing image paths, text descriptions, and labels.
-            image_transform (callable, optional): Transform to be applied to the images.
-            max_len (int): Maximum length for text tokenization.
-            class_to_idx (dict, optional): Mapping from class names to numeric indices.
-        """
+    def __init__(self, dataframe, image_transform=None, max_len=32,
+                 tokenizer=None, class_to_idx=None):
         self.dataframe = dataframe
         self.image_transform = image_transform
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = tokenizer
         self.max_len = max_len
-        self.class_to_idx = class_to_idx  # Pass the class mapping
+        self.class_to_idx = class_to_idx
+
+        self._token_cache = {}
 
     def __len__(self):
-        """Return the total number of samples in the dataset."""
         return len(self.dataframe)
 
     def __getitem__(self, idx):
-        """
-        Retrieve an item from the dataset.
-
-        Args:
-            idx (int): Index of the sample to retrieve.
-
-        Returns:
-            dict: A dictionary containing the image, tokenized text, and numeric label.
-        """
         # Get image path, text description, and label from the dataframe
         img_path = self.dataframe.iloc[idx]['image_path']
         text_desc = self.dataframe.iloc[idx]['text_description']
-        label = self.dataframe.iloc[idx]['label']  
+        label = self.dataframe.iloc[idx]['label']
 
         # Load and preprocess the image
         image = Image.open(img_path).convert("RGB")
+
         if self.image_transform:
             image = self.image_transform(image)
 
-        # Tokenize the text description
-        text_inputs = self.tokenizer(
-            text_desc, 
-            padding='max_length', 
-            truncation=True, 
-            max_length=self.max_len, 
-            return_tensors="pt"
-        )
+        # Tokenize the text description using caching
+        if text_desc in self._token_cache:
+            text_inputs = self._token_cache[text_desc]
+        else:
+            text_inputs = self.tokenizer(
+                text_desc,
+                add_special_tokens=True,
+                padding='max_length',
+                truncation=True,
+                max_length=self.max_len,
+                return_token_type_ids=False,
+                return_tensors="pt"
+            )
+            self._token_cache[text_desc] = text_inputs
 
         # Convert string label to numeric label using the class mapping
         numeric_label = self.class_to_idx[label]
@@ -119,387 +124,139 @@ class GarbageDataset(Dataset):
         # Return the image, text input, and numeric label
         return {
             'image': image,
-            'input_ids': text_inputs['input_ids'].squeeze(0),  
-            'attention_mask': text_inputs['attention_mask'].squeeze(0),  
-            'label': torch.tensor(numeric_label, dtype=torch.long)  
+            'input_ids': text_inputs['input_ids'].squeeze(0),
+            'attention_mask': text_inputs['attention_mask'].squeeze(0),
+            'label': torch.tensor(numeric_label, dtype=torch.long),
+            'text_description': text_desc  # For logging misclassified examples
         }
 
-# custom activation function (Modified Swish)
-class CustomActivation(nn.Module):
-    def forward(self, x):
-        """
-        Apply the custom activation function.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor after applying the activation.
-        """
-        return x * torch.sigmoid(torch.log(1 + torch.abs(x)))
-
-# define the modified ResNet-34 model for feature extraction
-class ModifiedResNet34(nn.Module):
-    def __init__(self):
-        """
-        Initialize the Modified ResNet-34 model.
-
-        This model removes the final classification layer and adds a custom activation function.
-        """
-        super(ModifiedResNet34, self).__init__()
-        self.base_model = models.resnet34(pretrained=True)
-        self.base_model.fc = nn.Identity()  # Remove the final classification layer
-        self.activation = CustomActivation()
+# Define the image model using ResNet-50
+class ImageModel(nn.Module):
+    def __init__(self, dropout_rate=0.5):
+        super(ImageModel, self).__init__()
+        self.model = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        # Remove the last classification layer
+        self.model.fc = nn.Identity()
+        # Feature extractor to output a feature vector
+        self.feature_extractor = nn.Sequential(
+            nn.Linear(2048, 512),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+        )
 
     def forward(self, x):
-        """
-        Forward pass through the modified ResNet-34.
-
-        Args:
-            x (torch.Tensor): Input image tensor.
-
-        Returns:
-            torch.Tensor: Extracted features from the input image.
-        """
-        x = self.base_model.conv1(x)
-        x = self.base_model.bn1(x)
-        x = self.activation(x)
-        x = self.base_model.layer1(x)
-        x = self.base_model.layer2(x)
-        x = self.base_model.layer3(x)
-        x = self.base_model.layer4(x)
-        x = self.base_model.avgpool(x)
-        x = torch.flatten(x, 1)  # Resulting in a [batch_size, 512] tensor
+        x = self.model(x)  # x will have shape (batch_size, 2048)
+        x = self.feature_extractor(x)  # x will have shape (batch_size, 512)
         return x
 
-# garbage classifier that combines image and text features
+# Define the text model using BERT
+class TextModel(nn.Module):
+    def __init__(self, dropout_rate=0.5, pretrained_model_name='bert-base-uncased'):
+        super(TextModel, self).__init__()
+        self.bert = BertModel.from_pretrained(pretrained_model_name)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.feature_extractor = nn.Linear(self.bert.config.hidden_size, 512)
+
+    def forward(self, input_ids, attention_mask):
+        # Get BERT outputs
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        cls_token_embedding = outputs.last_hidden_state[:, 0, :]  # Extract the CLS token
+        pooled_output = self.dropout(cls_token_embedding)
+        text_features = self.feature_extractor(pooled_output)
+        return text_features
+
+# GarbageClassifier model
 class GarbageClassifier(nn.Module):
-    def __init__(self, num_classes=4):
-        """
-        Initialize the GarbageClassifier.
-
-        Args:
-            num_classes (int): Number of output classes for classification.
-        """
+    def __init__(self, num_classes=4, dropout_rate=0.5):
         super(GarbageClassifier, self).__init__()
-        # image feature extraction with ResNet
-        self.resnet = ModifiedResNet34()
-        
-        # Register hooks to save activations and gradients
-        self.activations = None
-        self.gradients = None
-
-        # Last convolutional layer of the ResNet (adapt this if your architecture is different)
-        self.resnet.layer4[1].register_forward_hook(self.save_activation)
-        self.resnet.layer4[1].register_backward_hook(self.save_gradient)
-
-        # text feature extraction with BERT
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
-
-        # classification layer after combining image and text features
-        self.fc_combined = nn.Linear(768 + 512, num_classes)
-
-        # separate classification layers for image and text outputs
-        self.fc_image = nn.Linear(512, num_classes)
-        self.fc_text = nn.Linear(768, num_classes)
+        # Image feature extraction with ResNet-50
+        self.image_model = ImageModel(dropout_rate=dropout_rate)
+        # Text model
+        self.text_model = TextModel(dropout_rate=dropout_rate)
+        # Fusion and classification layers
+        self.fusion = nn.Sequential(
+            nn.Linear(512 + 512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(256, num_classes)
+        )
 
     def forward(self, image, input_ids, attention_mask):
-        """
-        Forward pass through the GarbageClassifier.
+        # Get image features
+        image_features = self.image_model(image)  # Shape: (batch_size, 512)
+        # Get text features (logits)
+        text_features = self.text_model(input_ids, attention_mask)  # Shape: (batch_size, num_classes)
+        # Combined features
+        combined_features = torch.cat((image_features, text_features), dim=1)  # Shape: (batch_size, 512 + num_classes)
+        # Combined prediction
+        combined_output = self.fusion(combined_features)      # Shape: (batch_size, num_classes)
+        return combined_output
 
-        Args:
-            image (torch.Tensor): Input image tensor.
-            input_ids (torch.Tensor): Input token IDs for text.
-            attention_mask (torch.Tensor): Attention mask for the text input.
+# UnNormalize class
+class UnNormalize(object):
+    def __init__(self, mean, std):
+        self.mean = torch.tensor(mean).view(3,1,1)
+        self.std = torch.tensor(std).view(3,1,1)
 
-        Returns:
-            tuple: Separate and combined outputs for image and text classification.
-        """
-        # get image features from ResNet
-        image_features = self.resnet(image)
+    def __call__(self, tensor):
+        tensor = tensor * self.std + self.mean
+        return torch.clamp(tensor, 0, 1)
 
-        # get text features from BERT
-        bert_output = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        text_features = bert_output.pooler_output  # (batch_size, 768)
+# ---------------------------
+# Training, Validation, and Testing Functions
+# ---------------------------
 
-        # separate predictions for image and text
-        image_output = self.fc_image(image_features)  # classification based on image alone
-        text_output = self.fc_text(text_features)  # classification based on text alone
-
-        # combined features from both image and text
-        combined_features = torch.cat((image_features, text_features), dim=1)
-        combined_output = self.fc_combined(combined_features)
-
-        return image_output, text_output, combined_output
-
-    def save_activation(self, module, input, output):
-        """Hook to save the activations."""
-        self.activations = output
-
-    def save_gradient(self, module, grad_input, grad_output):
-        """Hook to save the gradients."""
-        self.gradients = grad_output[0]
-
-    def get_activations(self):
-        """Retrieve the saved activations."""
-        return self.activations
-
-    def get_gradients(self):
-        """Retrieve the saved gradients."""
-        return self.gradients
-
-   
-    
-def extract_data_from_folders(base_dir):
-    """
-    Extract images, labels, and text descriptions from a given folder.
-
-    Args:
-    - base_dir: The base directory containing subfolders with images.
-
-    Returns:
-    - A pandas DataFrame with columns 'image_path', 'text_description', and 'label'.
-    """
-    data = []
-
-    # Traverse through each subfolder
-    for label_folder in os.listdir(base_dir):
-        folder_path = os.path.join(base_dir, label_folder)
-
-        # Check if it's a directory
-        if os.path.isdir(folder_path):
-            # Loop through each image file in the subfolder
-            for filename in os.listdir(folder_path):
-                if filename.endswith(('.jpg', '.png', '.jpeg')):  # Filter image files
-                    image_path = os.path.join(folder_path, filename)
-
-                    # Extract text from filename (remove file extension)
-                    text_description = os.path.splitext(filename)[0]
-
-                    # Append image path, text, and label to the data list
-                    data.append({
-                        'image_path': image_path,
-                        'text_description': text_description,
-                        'label': label_folder  # The subfolder name represents the label (bin)
-                    })
-
-    # Convert to DataFrame for easy manipulation
-    return pd.DataFrame(data)
-
-def get_dataset_stats(dataloader):
-    """
-    Calculate dataset statistics (mean and std) for normalization.
-
-    Args:
-    - dataloader: A DataLoader for the dataset.
-
-    Returns:
-    - mean: The mean of the dataset across channels.
-    - std: The standard deviation of the dataset across channels.
-    """
-    mean = 0.
-    std = 0.
-    nb_samples = 0.
-
-    for batch in dataloader:
-        # get the images from the batch
-        images = batch['image']  # accessing the image tensor
-        batch_samples = images.size(0)  # number of samples in the batch
-        images = images.view(batch_samples, images.size(1), -1)  # reshape to (batch_size, channels, height * width)
-        
-        mean += images.mean(2).sum(0)  # accumulate mean for each channel
-        std += images.std(2).sum(0)    # accumulate std for each channel
-        nb_samples += batch_samples      # total number of samples
-
-    mean /= nb_samples  # calculate overall mean
-    std /= nb_samples    # calculate overall std
-    return mean, std
-
-def display_sample_from_trainset(trainset, idx=0):
-    """
-    Display an image sample from the training set, along with its label and text description.
-
-    Args:
-    - trainset: The dataset containing the samples.
-    - idx: Index of the sample to display (default: 0).
-    """
-    # Extract the image, label, and input IDs directly from the dataset
-    sample = trainset[idx]
-    image = sample['image']
-    label_idx = sample['label'].item()  # Convert to int if needed
-    input_ids = sample['input_ids']
-
-    # Convert label index to label string (ensure idx_to_class is defined)
-    label = idx_to_class[label_idx]
-
-    # Decode the text description from input IDs (ensure tokenizer is available)
-    text_description = trainset.tokenizer.decode(input_ids, skip_special_tokens=True)
-
-    # Unnormalize the image (use the same mean and std from your transforms)
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-    image = image * std + mean  # Undo normalization
-
-    # Permute the image to match the (H, W, C) format for matplotlib
-    image = image.permute(1, 2, 0).numpy()
-
-    # Display the image along with label and text description
-    plt.imshow(image)
-    plt.title(f'Class: {label}\nText: {text_description}')
-    plt.axis('off')
-    plt.show()  
-
-def generate_gradcam_heatmap(model, input_tensor, class_index):
-    # Forward pass
-    model.eval()
-    output = model(input_tensor)
-
-    # Get the predicted class
-    pred_class = output.argmax(dim=1).item()
-
-    # Get the gradients
-    model.zero_grad()
-    class_loss = output[0][class_index]
-    class_loss.backward()
-
-    # Get the gradients and activations
-    gradients = model.gradients
-    activations = model.get_activations(input_tensor)
-
-    # Global Average Pooling on the gradients
-    pooled_grads = torch.mean(gradients, dim=[0, 2, 3])
-    
-    # Weight the channels by the corresponding gradients
-    for i in range(len(pooled_grads)):
-        activations[:, i, :, :] *= pooled_grads[i]
-
-    # Create heatmap
-    heatmap = torch.mean(activations, dim=1).squeeze()
-    heatmap = np.maximum(heatmap.detach().numpy(), 0)
-    heatmap /= np.max(heatmap)  # Normalize
-
-    return heatmap
-
-def overlay_heatmap_on_image(original_image, heatmap):
-    # Resize heatmap to match original image dimensions
-    heatmap = cv2.resize(heatmap, (original_image.shape[1], original_image.shape[0]))
-    heatmap = np.uint8(255 * heatmap)  # Scale to [0, 255]
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)  # Apply colormap
-    superimposed_img = cv2.addWeighted(original_image, 0.6, heatmap, 0.4, 0)  # Blend
-    
-    return superimposed_img
-
-def save_heatmaps_for_test_images(model, testloader, device):
-    model.eval()
-    with torch.no_grad():
-        for batch in testloader:
-            images = batch['image'].to(device)
-            labels = batch['label'].to(device)
-            class_index = labels.item()  # Assuming batch size is 1 for this example
-
-            heatmap = generate_gradcam_heatmap(model, images, class_index)
-
-            for i in range(images.size(0)):
-                original_image = images[i].cpu().numpy().transpose(1, 2, 0)  # Convert to HWC format
-                original_image = np.clip(original_image, 0, 1)  # Normalize to [0, 1] if needed
-
-                # Overlay heatmap
-                superimposed_image = overlay_heatmap_on_image(original_image, heatmap)
-
-                # Save the image
-                plt.imsave(f'gradcam_output_{i}.pg', superimposed_image)
-
-                print(f'Saved Grad-CAM image for index {i}')
-
-def train_one_epoch(model, trainloader, optimizer, criterion, device):
-    """
-    Train the model for one epoch, calculating losses and accuracies for image, text, and combined outputs.
-
-    Args:
-    - model: The model to train.
-    - trainloader: DataLoader for the training set.
-    - optimizer: The optimizer for updating model parameters.
-    - criterion: The loss function.
-    - device: The device on which to perform training (CPU or GPU).
-
-    Returns:
-    - Tuple of losses and accuracies for image, text, and combined outputs.
-    """
-    running_loss_image = 0.0
-    running_loss_text = 0.0
+def train_one_epoch(model, trainloader, criterion, optimizer):
+    """Train the model for one epoch."""
+    model.train()
     running_loss_combined = 0.0
-    running_corrects_image = 0
-    running_corrects_text = 0
     running_corrects_combined = 0
 
-    model.train()
-    for batch in trainloader:
+    for i, batch in enumerate(trainloader):
         images = batch['image'].to(device)
-        text_input_ids = batch['input_ids'].to(device)
-        text_attention_mask = batch['attention_mask'].to(device)
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
         labels = batch['label'].to(device)
-        
+
         optimizer.zero_grad()
 
-        # Forward pass (separate outputs)
-        image_output, text_output, combined_output = model(images, text_input_ids, text_attention_mask)
-        
-        # Compute loss for image, text, and combined models
-        loss_image = criterion(image_output, labels)
-        loss_text = criterion(text_output, labels)
-        loss_combined = criterion(combined_output, labels)
-        
+        # Forward pass
+        combined_outputs = model(
+            images, input_ids, attention_mask
+        )
+
+        # Compute loss
+        loss_combined = criterion(combined_outputs, labels)
+
         # Backward pass and optimization
-        total_loss = loss_image + loss_text + loss_combined
-        total_loss.backward()
+        loss_combined.backward()
         optimizer.step()
 
-        # Update running loss and accuracy for image, text, and combined
-        running_loss_image += loss_image.item() * images.size(0)
-        running_loss_text += loss_text.item() * images.size(0)
+        # Update running loss
         running_loss_combined += loss_combined.item() * images.size(0)
-        
-        _, preds_image = torch.max(image_output, 1)
-        _, preds_text = torch.max(text_output, 1)
-        _, preds_combined = torch.max(combined_output, 1)
 
-        running_corrects_image += torch.sum(preds_image == labels.data)
-        running_corrects_text += torch.sum(preds_text == labels.data)
+        # Predictions
+        _, preds_combined = torch.max(combined_outputs, 1)
+
+        # Update running corrects
         running_corrects_combined += torch.sum(preds_combined == labels.data)
-    
-    # Compute epoch loss and accuracy for image, text, and combined
-    epoch_loss_image = running_loss_image / len(trainset)
-    epoch_loss_text = running_loss_text / len(trainset)
-    epoch_loss_combined = running_loss_combined / len(trainset)
-    
-    epoch_acc_image = running_corrects_image.double() / len(trainset)
-    epoch_acc_text = running_corrects_text.double() / len(trainset)
-    epoch_acc_combined = running_corrects_combined.double() / len(trainset)
 
-    return (epoch_loss_image, epoch_acc_image, epoch_loss_text, 
-            epoch_acc_text, epoch_loss_combined, epoch_acc_combined)
+    # Compute epoch loss and accuracy
+    epoch_loss_combined = running_loss_combined / len(trainloader.dataset)
+    epoch_acc_combined = running_corrects_combined.double() / len(trainloader.dataset)
 
-def validate_model(model, valloader, criterion, device):
-    """
-    Validate the model on the validation set, calculating losses and accuracies.
+    return epoch_loss_combined, epoch_acc_combined
 
-    Args:
-    - model: The model to validate.
-    - valloader: DataLoader for the validation set.
-    - criterion: The loss function.
-    - device: The device on which to perform validation (CPU or GPU).
-
-    Returns:
-    - Tuple of losses and accuracies for image, text, and combined outputs.
-    """
-    val_running_loss_image = 0.0
-    val_running_loss_text = 0.0
-    val_running_loss_combined = 0.0
-    val_running_corrects_image = 0
-    val_running_corrects_text = 0
-    val_running_corrects_combined = 0
-    
+def validate(model, valloader, criterion):
+    """Validate the model."""
     model.eval()
+    val_running_loss_combined = 0.0
+    val_running_corrects_combined = 0
+
+    all_labels = []
+    all_preds_combined = []
+
     with torch.no_grad():
         for batch in valloader:
             images = batch['image'].to(device)
@@ -507,225 +264,451 @@ def validate_model(model, valloader, criterion, device):
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['label'].to(device)
 
-            # Forward pass (separate outputs)
-            image_output, text_output, combined_output = model(images, input_ids, attention_mask)
-            
-            # Compute loss for image, text, and combined models
-            loss_image = criterion(image_output, labels)
-            loss_text = criterion(text_output, labels)
-            loss_combined = criterion(combined_output, labels)
-            
-            # Update running loss and accuracy for image, text, and combined
-            val_running_loss_image += loss_image.item() * images.size(0)
-            val_running_loss_text += loss_text.item() * images.size(0)
+            # Forward pass
+            combined_outputs = model(
+                images, input_ids, attention_mask
+            )
+
+            # Compute loss
+            loss_combined = criterion(combined_outputs, labels)
+
+            # Update running loss
             val_running_loss_combined += loss_combined.item() * images.size(0)
-            
-            _, preds_image = torch.max(image_output, 1)
-            _, preds_text = torch.max(text_output, 1)
-            _, preds_combined = torch.max(combined_output, 1)
 
-            val_running_corrects_image += torch.sum(preds_image == labels.data)
-            val_running_corrects_text += torch.sum(preds_text == labels.data)
-            val_running_corrects_combined += torch.sum(preds_combined == labels.data)
+            # Predictions
+            _, preds_combined = torch.max(combined_outputs, 1)
 
-    # Compute validation loss and accuracy for image, text, and combined
-    val_loss_image = val_running_loss_image / len(valset)
-    val_loss_text = val_running_loss_text / len(valset)
-    val_loss_combined = val_running_loss_combined / len(valset)
-    
-    val_acc_image = val_running_corrects_image.double() / len(valset)
-    val_acc_text = val_running_corrects_text.double() / len(valset)
-    val_acc_combined = val_running_corrects_combined.double() / len(valset)
+            # Update running corrects
+            val_running_corrects_combined += torch.sum(
+                preds_combined == labels.data
+            )
 
-    return (val_loss_image, val_acc_image, val_loss_text, 
-            val_acc_text, val_loss_combined, val_acc_combined)
+            # Collect labels and predictions
+            all_labels.extend(labels.cpu().numpy())
+            all_preds_combined.extend(preds_combined.cpu().numpy())
 
-def test_model(model, testloader, testset, device):
-    """
-    Function to test the model and calculate accuracy on the test set.
+    # Compute validation loss and accuracy
+    val_loss_combined = val_running_loss_combined / len(valloader.dataset)
+    val_acc_combined = val_running_corrects_combined.double() / len(valloader.dataset)
 
-    Args:
-    - model: Trained PyTorch model
-    - testloader: DataLoader for the test dataset
-    - testset: The test dataset
-    - device: The device on which to perform testing (CPU or GPU)
+    # Compute metrics
+    precision, recall, f1 = compute_metrics(all_labels, all_preds_combined)
 
-    Returns:
-    - test_acc: Accuracy of the model on the test set
-    """
-    model.eval()  # Set the model to evaluation mode
+    return val_loss_combined, val_acc_combined, precision, recall, f1
 
-    test_running_corrects = 0
+def test(model, testloader):
+    """Test the model and log misclassified examples."""
+    model.eval()
+    test_running_corrects_combined = 0
 
-    with torch.no_grad():  # Disable gradient computation for testing
+    all_labels = []
+    all_preds_combined = []
+
+    # Instantiate the UnNormalize transform
+    unnormalize = UnNormalize(mean=[0.485, 0.456, 0.406],
+                              std=[0.229, 0.224, 0.225])
+
+    with torch.no_grad():
         for batch in testloader:
             images = batch['image'].to(device)
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['label'].to(device)
+            text_descriptions = batch['text_description']
 
-            # Get outputs from the model
-            image_output, text_output, combined_output = model(images, input_ids=input_ids, attention_mask=attention_mask)
+            # Forward pass
+            combined_outputs = model(
+                images, input_ids, attention_mask
+            )
 
-            # Use combined_output for prediction
-            _, preds = torch.max(combined_output, 1)
+            # Predictions
+            _, preds_combined = torch.max(combined_outputs, 1)
 
-            # Update running corrects
-            test_running_corrects += torch.sum(preds == labels.data)
+            test_running_corrects_combined += torch.sum(
+                preds_combined == labels.data
+            )
 
-    # Calculate test accuracy
-    test_acc = test_running_corrects.double() / len(testset)
-    print(f'Test Accuracy: {test_acc:.4f}')
+            # Collect labels and predictions
+            all_labels.extend(labels.cpu().numpy())
+            all_preds_combined.extend(preds_combined.cpu().numpy())
 
-    return test_acc
+            # Log misclassified examples
+            for img, pred_label, true_label, text in zip(
+                images.cpu(), preds_combined.cpu(), labels.cpu(), text_descriptions
+            ):
+                if pred_label != true_label:
+                    # Unnormalize the image
+                    unnormalized_img = unnormalize(img)
+                    # Convert the tensor to a PIL image
+                    img_pil = transforms.ToPILImage()(unnormalized_img)
 
-if __name__ == '__main__':
-    # init
-    batch_size = 32
-    num_workers = 4
+    # Compute test accuracy
+    test_acc_combined = test_running_corrects_combined.double() / len(testloader.dataset)
 
-    run = wandb.init(project='garbage-collection')
+    # Compute metrics
+    precision, recall, f1 = compute_metrics(all_labels, all_preds_combined)
 
-    # initialize the transforms
-    torchvision_transform = transforms.Compose([transforms.Resize((224,224)),\
-        transforms.RandomHorizontalFlip(), transforms.RandomVerticalFlip(),
-        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406] ,std=[0.229, 0.224, 0.225] )])
+    # Confusion matrix
+    conf_mat = confusion_matrix(all_labels, all_preds_combined)
 
-    torchvision_transform_test = transforms.Compose([transforms.Resize((224,224)),\
-        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406] ,std=[0.229, 0.224, 0.225])])
+    return test_acc_combined, precision, recall, f1, conf_mat
 
-    # extract the data
-    trainset_df = extract_data_from_folders(trainset_dir)
-    valset_df = extract_data_from_folders(valset_dir)
-    testset_df = extract_data_from_folders(testset_dir)
+# ---------------------------
+# Training Function
+# ---------------------------
 
-    # transform and normalize the training, validation, and testing data
-    trainset = GarbageDataset(trainset_df, image_transform=torchvision_transform, class_to_idx=class_to_idx)
-    valset = GarbageDataset(valset_df, image_transform=torchvision_transform, class_to_idx=class_to_idx)
-    testset = GarbageDataset(testset_df, image_transform=torchvision_transform_test, class_to_idx=class_to_idx)
+def train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, num_epochs): 
+    # Initialize the optimizer
+    optimizer = optim.Adam(trainable_params, lr=LEARNING_RATE, weight_decay=1e-4)
 
-    # create the dataloaders
-    trainloader = DataLoader(trainset[0:100], batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    valloader = DataLoader(valset[0:100], batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    testloader = DataLoader(testset[0:100], batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    # Early stopping parameters
+    early_stopping_patience = 4
+    epochs_no_improve = 0
 
-    #display_sample_from_trainset(trainset, idx=0)
+    # Lists to store metrics for plotting
+    train_losses = []
+    train_accuracies = []
+    val_losses = []
+    val_accuracies = []
+    precisions = []
+    recalls = []
+    f1_scores = []
 
-    # fix the class weights
-    class_weights = compute_class_weight('balanced', classes=np.unique(trainset_df['label']), y=trainset_df['label'])
-    class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
-
-    # initialize the model and freeze the desired layers
-    model = GarbageClassifier(num_classes=len(class_names)).to(device)
-
-    # freeze all ResNet layers and unfreeze the last ResNet block
-    for name, param in model.resnet.named_parameters():
-        if 'layer4' in name:
-            param.requires_grad = True  # Unfreeze last ResNet block
-        else:
-            param.requires_grad = False  # Freeze other layers
-
-    # freeze all BERT layers except the last BERT encoder layer
-    for i, param in enumerate(model.bert.parameters()):
-        param.requires_grad = False  # Freeze all parameters
-        if i >= len(model.bert.encoder.layer) - 1:  # Check if it's the last encoder layer
-            param.requires_grad = True  # Unfreeze parameters of the last encoder layer
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=initial_learning_rate)
-
-    num_epochs = 1
-    wandb.config = {"epochs": num_epochs, "batch_size": batch_size, "learning_rate": initial_learning_rate}
-
-    best_val_acc = 0.0  # Variable to track the best validation accuracy
-
-    # Main training loop
-    for epoch in range(wandb.config['epochs']):
+    for epoch in range(num_epochs):  # Fixed epochs to 10
         print(f'Epoch {epoch + 1}/{num_epochs}')
         print('-' * 10)
 
-        # Train for one epoch
-        train_results = train_one_epoch(model, trainloader, optimizer, criterion, device)
-        epoch_loss_image, epoch_acc_image, epoch_loss_text, epoch_acc_text, epoch_loss_combined, epoch_acc_combined = train_results
+        # Training phase
+        epoch_loss_combined, epoch_acc_combined = train_one_epoch(
+            model, trainloader, criterion, optimizer
+        )
 
-        # Validate the model
-        val_results = validate_model(model, valloader, criterion, device)
-        val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
+        train_losses.append(epoch_loss_combined)
+        train_accuracies.append(epoch_acc_combined)
 
-        # Log results
-        wandb.log({
-            "Training Loss (Image)": epoch_loss_image, 
-            "Training Accuracy (Image)": epoch_acc_image,
-            "Training Loss (Text)": epoch_loss_text, 
-            "Training Accuracy (Text)": epoch_acc_text,
-            "Training Loss (Combined)": epoch_loss_combined, 
-            "Training Accuracy (Combined)": epoch_acc_combined,
-            "Validation Loss (Image)": val_loss_image, 
-            "Validation Accuracy (Image)": val_acc_image,
-            "Validation Loss (Text)": val_loss_text, 
-            "Validation Accuracy (Text)": val_acc_text,
-            "Validation Loss (Combined)": val_loss_combined, 
-            "Validation Accuracy (Combined)": val_acc_combined
-        })
+        print(f'Training Combined Loss: {epoch_loss_combined:.4f} '
+                f'Acc: {epoch_acc_combined:.4f}')
 
-        if val_acc_combined > best_val_acc:
-            best_val_acc = val_acc_combined
-            print(f"New best model found! Saving model with validation accuracy: {best_val_acc:.4f}")
-            torch.save(model.state_dict(), './best_garbage_model.pth') 
+        # Validation phase
+        val_loss_combined, val_acc_combined, precision, recall, f1 = validate(
+            model, valloader, criterion
+        )
 
-    model.load_state_dict(torch.load('./best_garbage_model.pth'))  # Load the best model from the initial training
+        val_losses.append(val_loss_combined)
+        val_accuracies.append(val_acc_combined)
+        precisions.append(precision)
+        recalls.append(recall)
+        f1_scores.append(f1)
 
-    # Unfreeze the desired layers for fine-tuning
-    for param in model.resnet.parameters():
-        param.requires_grad = True  # Unfreeze all ResNet layers or selectively as per your choice
+        print(f'Validation Combined Loss: {val_loss_combined:.4f} '
+                f'Acc: {val_acc_combined:.4f}')
+        print(f'Validation Precision: {precision:.4f}, '
+                f'Recall: {recall:.4f}, F1-score: {f1:.4f}')
 
-    for param in model.bert.parameters():
+        # Early stopping
+        if val_loss_combined < best_val_loss:
+            best_val_loss = val_loss_combined
+            epochs_no_improve = 0
+            # Save the best model based on validation loss
+            print(f"New best model found! Saving model with validation "
+                    f"loss: {best_val_loss:.4f}")
+            torch.save(model.state_dict(), 'best_model.pth')
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= early_stopping_patience:
+                print(f'Early stopping at epoch {epoch + 1}')
+                break
+
+    # Plotting results
+    filename = "/home/shaakira.gadiwan/assignment2/metrics_plot1.png"
+    plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, precisions, recalls, f1_scores, filename)
+
+    return best_val_loss
+
+def plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, precisions, recalls, f1_scores, filename):
+
+    print("Train Losses:", train_losses)
+    print("Validation Losses:", val_losses)
+    print("Train Accuracies:", train_accuracies)
+    print("Validation Accuracies:", val_accuracies)
+    print("Precisions:", precisions)
+    print("Recalls:", recalls)
+    print("F1 Scores:", f1_scores)
+
+    # Convert list of tensors to NumPy arrays if they are on GPU
+    train_losses = [loss.detach().cpu().numpy() if isinstance(loss, torch.Tensor) else loss for loss in train_losses]
+    val_losses = [loss.detach().cpu().numpy() if isinstance(loss, torch.Tensor) else loss for loss in val_losses]
+    train_accuracies = [acc.detach().cpu().numpy() if isinstance(acc, torch.Tensor) else acc for acc in train_accuracies]
+    val_accuracies = [acc.detach().cpu().numpy() if isinstance(acc, torch.Tensor) else acc for acc in val_accuracies]
+    precisions = [precision.detach().cpu().numpy() if isinstance(precision, torch.Tensor) else precision for precision in precisions]
+    recalls = [recall.detach().cpu().numpy() if isinstance(recall, torch.Tensor) else recall for recall in recalls]
+    f1_scores = [f1.detach().cpu().numpy() if isinstance(f1, torch.Tensor) else f1 for f1 in f1_scores]
+
+
+    epochs = range(1, len(train_losses) + 1)
+
+    print("Epochs:", epochs)
+    print("Train Losses:", train_losses)
+    print("Validation Losses:", val_losses)
+    print("Train Accuracies:", train_accuracies)
+    print("Validation Accuracies:", val_accuracies)
+    print("Precisions:", precisions)
+    print("Recalls:", recalls)
+    print("F1 Scores:", f1_scores)
+
+    # Check epochs and convert to list if it's a range object
+    epochs = list(epochs)  # Converts range to list of epoch numbers if necessary
+
+    # Plot Loss
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 2, 1)
+    plt.scatter(epochs, train_losses, label='Training Loss')
+    plt.scatter(epochs, val_losses, label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    # Plot Accuracy
+    plt.subplot(2, 2, 2)
+    plt.scatter(epochs, train_accuracies, label='Training Accuracy')
+    plt.scatter(epochs, val_accuracies, label='Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    # Plot Precision
+    plt.subplot(2, 2, 3)
+    plt.scatter(epochs, precisions, label='Precision')
+    plt.title('Validation Precision')
+    plt.xlabel('Epochs')
+    plt.ylabel('Precision')
+    plt.legend()
+
+    # Plot Recall and F1 Score
+    plt.subplot(2, 2, 4)
+    plt.scatter(epochs, recalls, label='Recall')
+    plt.scatter(epochs, f1_scores, label='F1 Score')
+    plt.title('Validation Recall and F1 Score')
+    plt.xlabel('Epochs')
+    plt.ylabel('Score')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+def compute_class_weights(trainset_df):
+    # Compute class weights
+    class_labels = np.unique(trainset_df['label'])
+    class_weights = compute_class_weight(
+        'balanced',
+        classes=class_labels,
+        y=trainset_df['label']
+    )
+    # Create a mapping from class labels to weights
+    class_weights_dict = {label: weight for label, weight in zip(class_labels, class_weights)}
+    
+    # Map the class weights to the class indices
+    class_weights_list = [class_weights_dict[class_name] for class_name in class_names]
+    class_weights_tensor = torch.tensor(class_weights_list, dtype=torch.float).to(device)
+
+    return class_weights_tensor
+
+def data_preprocessing():
+    # Extract the data
+    trainset_df = extract_data_from_folders(TRAINSET_DIR)
+    valset_df = extract_data_from_folders(VALSET_DIR)
+    testset_df = extract_data_from_folders(TESTSET_DIR)
+
+    class_weights_tensor = compute_class_weights(trainset_df)
+
+    # Initialize the BERT tokenizer
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    # Image transformations
+    transform_train = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    # Create datasets
+    trainset = GarbageDataset(
+        trainset_df,
+        image_transform=transform_train,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )
+    valset = GarbageDataset(
+        valset_df,
+        image_transform=transform_train,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )    
+    testset = GarbageDataset(
+        testset_df,
+        image_transform=transform_test,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )
+
+    # DataLoaders
+    trainloader = DataLoader(
+        trainset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=2
+    )
+    valloader = DataLoader(
+        valset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=2
+    )
+    testloader = DataLoader(
+        testset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=2
+    )
+
+    return trainloader, valloader, testloader, class_weights_tensor
+
+def plot_conf_mat(conf_mat):
+    # Confusion matrix for test set
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(
+        conf_mat,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=class_names,
+        yticklabels=class_names
+    )
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.title('Test Confusion Matrix')
+    plt.savefig('/home/shaakira.gadiwan/assignment2/confusion_matrix.png') 
+    plt.close(fig)
+
+
+def compute_metrics(all_labels, all_preds_combined):
+     # Compute additional metrics
+    precision = precision_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
+    recall = recall_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
+    f1 = f1_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
+
+    return precision, recall, f1
+
+def plot_test_metrics(test_acc_combined, test_precision, test_recall, test_f1, filename='test_results.png'):
+
+    # Convert each metric if they are tensors on the GPU
+    metrics = [test_acc_combined, test_precision, test_recall, test_f1]
+    test_acc_combined, test_precision, test_recall, test_f1 = [
+        metric.detach().cpu().numpy() if isinstance(metric, torch.Tensor) else metric 
+        for metric in metrics
+    ]
+
+
+    # Create a new figure
+    plt.figure(figsize=(8, 6))
+
+    # Plot Test Metrics
+    plt.bar(['Accuracy', 'Precision', 'Recall', 'F1 Score'], 
+            [test_acc_combined, test_precision, test_recall, test_f1], color='skyblue')
+    plt.ylim(0, 1)  # Set y-axis limits for better visibility
+    plt.title('Test Metrics')
+    plt.ylabel('Score')
+
+    plt.tight_layout()
+    
+    # Save the figure instead of showing it
+    plt.savefig(filename)  # Save as a PNG file (default)
+    plt.close()  # Close the figure to free up memory
+
+
+# ---------------------------
+# Main Function
+# ---------------------------
+
+def main():
+    trainloader, valloader, testloader, class_weights_tensor = data_preprocessing()
+
+    # Define the loss function with class weights
+    criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+
+    # Initialize the model
+    model = GarbageClassifier(num_classes=len(class_names), dropout_rate=DROPOUT_RATE).to(device)
+
+    # Freeze and unfreeze layers as needed
+    # Image model
+    for param in model.image_model.model.parameters():
+        param.requires_grad = False
+    # for param in model.image_model.model.layer3.parameters():
+    #     param.requires_grad = True
+    for param in model.image_model.model.layer4.parameters():
+        param.requires_grad = True
+    for param in model.image_model.feature_extractor.parameters():
         param.requires_grad = True
 
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=fine_tuning_learning_rate)
-    wandb.config.update({"fine_tuning_epochs": num_epochs, "fine_tuning_learning_rate": fine_tuning_learning_rate})
+    # Text model
+    for param in model.text_model.bert.parameters():
+        param.requires_grad = True
+    for param in model.text_model.feature_extractor.parameters():
+        param.requires_grad = True
 
-    best_val_acc_fine_tuning = 0.0
+    # Collect trainable parameters
+    trainable_params = [
+        # Image feature extractor
+        # {params: model.image_model.model.layer3.parameters(), 'lr': config.learning_rate},
+        {'params': model.image_model.model.layer4.parameters(), 'lr': LEARNING_RATE * 0.1},
+        {'params': model.image_model.feature_extractor.parameters(), 'lr': LEARNING_RATE},
+        # Text model
+        {'params': model.text_model.bert.parameters(), 'lr': LEARNING_RATE * 0.1},
+        {'params': model.text_model.feature_extractor.parameters(), 'lr': LEARNING_RATE},
+        # Fusion and classifier layers
+        {'params': model.fusion.parameters(), 'lr': LEARNING_RATE},
+    ]
 
-    # Fine training loop
-    for epoch in range(wandb.config['epochs']):
-        print(f'Epoch {epoch + 1}/{num_epochs}')
-        print('-' * 10)
+    best_val_loss = float('inf')
 
-        # Train for one epoch
-        train_results = train_one_epoch(model, trainloader, optimizer, criterion, device)
-        epoch_loss_image, epoch_acc_image, epoch_loss_text, epoch_acc_text, epoch_loss_combined, epoch_acc_combined = train_results
+    best_val_loss = train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, 20)
 
-        # Validate the model
-        val_results = validate_model(model, valloader, criterion, device)
-        val_loss_image, val_acc_image, val_loss_text, val_acc_text, val_loss_combined, val_acc_combined = val_results
+    # Load the best model and evaluate on the test set
+    model.load_state_dict(torch.load('best_model.pth'))
 
-        # Log results
-        wandb.log({
-            "Training Loss (Image)": epoch_loss_image, 
-            "Training Accuracy (Image)": epoch_acc_image,
-            "Training Loss (Text)": epoch_loss_text, 
-            "Training Accuracy (Text)": epoch_acc_text,
-            "Training Loss (Combined)": epoch_loss_combined, 
-            "Training Accuracy (Combined)": epoch_acc_combined,
-            "Validation Loss (Image)": val_loss_image, 
-            "Validation Accuracy (Image)": val_acc_image,
-            "Validation Loss (Text)": val_loss_text, 
-            "Validation Accuracy (Text)": val_acc_text,
-            "Validation Loss (Combined)": val_loss_combined, 
-            "Validation Accuracy (Combined)": val_acc_combined
-        })
+    test_acc_combined, precision, recall, f1, conf_mat = test(model, testloader)
 
-        if val_acc_combined > best_val_acc_fine_tuning:
-            best_val_acc_fine_tuning = val_acc_combined
-            print(f"New best model found! Saving model with validation accuracy: {best_val_acc:.4f}")
-            torch.save(model.state_dict(), './best_garbage_model.pth') 
-        
-    model.load_state_dict(torch.load('./best_garbage_model.pth'))
-    test_accuracy = test_model(model, testloader, testset, device)
-    wandb.log({"Test Accuracy": test_accuracy})
+    print(f'Test Combined Accuracy: {test_acc_combined:.4f}')
+    print(f'Test Precision: {precision:.4f}, '
+            f'Recall: {recall:.4f}, F1-score: {f1:.4f}')
 
-    # Generate and save Grad-CAM heatmaps for the test images
-    save_heatmaps_for_test_images(model, testloader, device)
-
+    plot_conf_mat(conf_mat)
     
+if __name__ == '__main__':
+    main()
