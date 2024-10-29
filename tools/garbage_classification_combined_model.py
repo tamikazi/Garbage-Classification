@@ -213,6 +213,9 @@ def train_one_epoch(model, trainloader, criterion, optimizer):
     running_loss_combined = 0.0
     running_corrects_combined = 0
 
+    # Define a learning rate scheduler 
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+
     for i, batch in enumerate(trainloader):
         images = batch['image'].to(device)
         input_ids = batch['input_ids'].to(device)
@@ -241,6 +244,9 @@ def train_one_epoch(model, trainloader, criterion, optimizer):
 
         # Update running corrects
         running_corrects_combined += torch.sum(preds_combined == labels.data)
+
+    # Step the scheduler at the end of each epoch
+    scheduler.step()
 
     # Compute epoch loss and accuracy
     epoch_loss_combined = running_loss_combined / len(trainloader.dataset)
