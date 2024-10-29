@@ -700,6 +700,44 @@ def main():
     best_val_loss = train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, 20)
 
     # Load the best model and evaluate on the test set
+    model.load_state_dict(torch.load('best_model.pth', weights_only=True))
+
+    # Freeze and unfreeze layers as needed
+    # Image model
+    for param in model.image_model.model.parameters():
+        param.requires_grad = False
+    for param in model.image_model.model.layer2.parameters():
+        param.requires_grad = True
+    for param in model.image_model.model.layer3.parameters():
+        param.requires_grad = True
+    for param in model.image_model.model.layer4.parameters():
+        param.requires_grad = True
+    for param in model.image_model.feature_extractor.parameters():
+        param.requires_grad = True
+
+    # Text model
+    for param in model.text_model.bert.parameters():
+        param.requires_grad = True
+    for param in model.text_model.feature_extractor.parameters():
+        param.requires_grad = True
+
+    # Collect trainable parameters
+    trainable_params = [
+        # Image feature extractor
+        {'params': model.image_model.model.layer2.parameters(), 'lr': LEARNING_RATE * 0.01},
+        {'params': model.image_model.model.layer3.parameters(), 'lr': LEARNING_RATE * 0.01},
+        {'params': model.image_model.model.layer4.parameters(), 'lr': LEARNING_RATE * 0.01},
+        {'params': model.image_model.feature_extractor.parameters(), 'lr': LEARNING_RATE * 0.1},
+        # Text model
+        {'params': model.text_model.bert.parameters(), 'lr': LEARNING_RATE * 0.01},
+        {'params': model.text_model.feature_extractor.parameters(), 'lr': LEARNING_RATE * 0.1},
+        # Fusion and classifier layers
+        {'params': model.fusion.parameters(), 'lr': LEARNING_RATE},
+    ]
+
+    best_val_loss = train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, 5)
+
+    # Load the best model and evaluate on the test set
     model.load_state_dict(torch.load('best_model.pth'))
 
     test_acc_combined, precision, recall, f1, conf_mat = test(model, testloader)
