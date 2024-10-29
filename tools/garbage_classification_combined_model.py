@@ -50,31 +50,6 @@ idx_to_class = {idx: class_name for class_name, idx in class_to_idx.items()}
 # Helper Functions and Classes
 # ---------------------------
 
-def extract_data_from_folders(base_dir):
-    """Extract image paths, text descriptions, and labels from folders."""
-    data = []
-    # Traverse through each subfolder
-    for label_folder in os.listdir(base_dir):
-        folder_path = os.path.join(base_dir, label_folder)
-        # Check if it's a directory
-        if os.path.isdir(folder_path):
-            # Loop through each image file in the subfolder
-            for filename in os.listdir(folder_path):
-                if filename.endswith(('.jpg', '.png', '.jpeg')):  # Filter image files
-                    image_path = os.path.join(folder_path, filename)
-                    # Extract text from filename (remove file extension)
-                    text_description = os.path.splitext(filename)[0]
-                    # Append image path, text, and label to the data list
-                    text = text_description.replace('_', ' ')
-                    text_without_digits = re.sub(r'\d+', '', text).strip().lower()
-                    data.append({
-                        'image_path': image_path,
-                        'text_description': text_without_digits,
-                        'label': label_folder  # The subfolder name represents the label
-                    })
-    # Convert to DataFrame for easy manipulation
-    return pd.DataFrame(data)
-
 class GarbageDataset(Dataset):
     """Custom Dataset for Garbage Classification."""
 
@@ -202,7 +177,125 @@ class UnNormalize(object):
     def __call__(self, tensor):
         tensor = tensor * self.std + self.mean
         return torch.clamp(tensor, 0, 1)
+    
+def extract_data_from_folders(base_dir):
+    """Extract image paths, text descriptions, and labels from folders."""
+    data = []
+    # Traverse through each subfolder
+    for label_folder in os.listdir(base_dir):
+        folder_path = os.path.join(base_dir, label_folder)
+        # Check if it's a directory
+        if os.path.isdir(folder_path):
+            # Loop through each image file in the subfolder
+            for filename in os.listdir(folder_path):
+                if filename.endswith(('.jpg', '.png', '.jpeg')):  # Filter image files
+                    image_path = os.path.join(folder_path, filename)
+                    # Extract text from filename (remove file extension)
+                    text_description = os.path.splitext(filename)[0]
+                    # Append image path, text, and label to the data list
+                    text = text_description.replace('_', ' ')
+                    text_without_digits = re.sub(r'\d+', '', text).strip().lower()
+                    data.append({
+                        'image_path': image_path,
+                        'text_description': text_without_digits,
+                        'label': label_folder  # The subfolder name represents the label
+                    })
+    # Convert to DataFrame for easy manipulation
+    return pd.DataFrame(data)
 
+def compute_class_weights(trainset_df):
+    # Compute class weights
+    class_labels = np.unique(trainset_df['label'])
+    class_weights = compute_class_weight(
+        'balanced',
+        classes=class_labels,
+        y=trainset_df['label']
+    )
+    # Create a mapping from class labels to weights
+    class_weights_dict = {label: weight for label, weight in zip(class_labels, class_weights)}
+    
+    # Map the class weights to the class indices
+    class_weights_list = [class_weights_dict[class_name] for class_name in class_names]
+    class_weights_tensor = torch.tensor(class_weights_list, dtype=torch.float).to(device)
+
+    return class_weights_tensor
+
+def data_preprocessing():
+    # Extract the data
+    trainset_df = extract_data_from_folders(TRAINSET_DIR)
+    valset_df = extract_data_from_folders(VALSET_DIR)
+    testset_df = extract_data_from_folders(TESTSET_DIR)
+
+    class_weights_tensor = compute_class_weights(trainset_df)
+
+    # Initialize the BERT tokenizer
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    # Image transformations
+    transform_train = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    # Create datasets
+    trainset = GarbageDataset(
+        trainset_df,
+        image_transform=transform_train,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )
+    valset = GarbageDataset(
+        valset_df,
+        image_transform=transform_train,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )    
+    testset = GarbageDataset(
+        testset_df,
+        image_transform=transform_test,
+        class_to_idx=class_to_idx,
+        tokenizer=tokenizer,
+        max_len=32
+    )
+
+    # DataLoaders
+    trainloader = DataLoader(
+        trainset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=2
+    )
+    valloader = DataLoader(
+        valset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=2
+    )
+    testloader = DataLoader(
+        testset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=2
+    )
+
+    return trainloader, valloader, testloader, class_weights_tensor
 # ---------------------------
 # Training, Validation, and Testing Functions
 # ---------------------------
@@ -253,6 +346,74 @@ def train_one_epoch(model, trainloader, criterion, optimizer):
     epoch_acc_combined = running_corrects_combined.double() / len(trainloader.dataset)
 
     return epoch_loss_combined, epoch_acc_combined
+
+def train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, num_epochs): 
+    # Initialize the optimizer
+    optimizer = optim.Adam(trainable_params, lr=LEARNING_RATE, weight_decay=1e-4)
+
+    # Early stopping parameters
+    early_stopping_patience = 4
+    epochs_no_improve = 0
+
+    # Lists to store metrics for plotting
+    train_losses = []
+    train_accuracies = []
+    val_losses = []
+    val_accuracies = []
+    precisions = []
+    recalls = []
+    f1_scores = []
+
+    for epoch in range(num_epochs):  # Fixed epochs to 10
+        print(f'Epoch {epoch + 1}/{num_epochs}')
+        print('-' * 10)
+
+        # Training phase
+        epoch_loss_combined, epoch_acc_combined = train_one_epoch(
+            model, trainloader, criterion, optimizer
+        )
+
+        train_losses.append(epoch_loss_combined)
+        train_accuracies.append(epoch_acc_combined)
+
+        print(f'Training Combined Loss: {epoch_loss_combined:.4f} '
+                f'Acc: {epoch_acc_combined:.4f}')
+
+        # Validation phase
+        val_loss_combined, val_acc_combined, precision, recall, f1 = validate(
+            model, valloader, criterion
+        )
+
+        val_losses.append(val_loss_combined)
+        val_accuracies.append(val_acc_combined)
+        precisions.append(precision)
+        recalls.append(recall)
+        f1_scores.append(f1)
+
+        print(f'Validation Combined Loss: {val_loss_combined:.4f} '
+                f'Acc: {val_acc_combined:.4f}')
+        print(f'Validation Precision: {precision:.4f}, '
+                f'Recall: {recall:.4f}, F1-score: {f1:.4f}')
+
+        # Early stopping
+        if val_loss_combined < best_val_loss:
+            best_val_loss = val_loss_combined
+            epochs_no_improve = 0
+            # Save the best model based on validation loss
+            print(f"New best model found! Saving model with validation "
+                    f"loss: {best_val_loss:.4f}")
+            torch.save(model.state_dict(), 'best_model.pth')
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= early_stopping_patience:
+                print(f'Early stopping at epoch {epoch + 1}')
+                break
+
+    # Plotting results
+    filename = "/home/shaakira.gadiwan/assignment2/metrics_plot1.png"
+    plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, precisions, recalls, f1_scores, filename)
+
+    return best_val_loss
 
 def validate(model, valloader, criterion):
     """Validate the model."""
@@ -359,88 +520,39 @@ def test(model, testloader):
 
     return test_acc_combined, precision, recall, f1, conf_mat
 
-# ---------------------------
-# Training Function
-# ---------------------------
+def plot_conf_mat(conf_mat):
+    # Confusion matrix for test set
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(
+        conf_mat,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=class_names,
+        yticklabels=class_names
+    )
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.title('Test Confusion Matrix')
+    plt.savefig('/home/shaakira.gadiwan/assignment2/confusion_matrix.png') 
+    plt.close(fig)
 
-def train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, num_epochs): 
-    # Initialize the optimizer
-    optimizer = optim.Adam(trainable_params, lr=LEARNING_RATE, weight_decay=1e-4)
 
-    # Early stopping parameters
-    early_stopping_patience = 4
-    epochs_no_improve = 0
+def compute_metrics(all_labels, all_preds_combined):
+     # Compute additional metrics
+    precision = precision_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
+    recall = recall_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
+    f1 = f1_score(
+        all_labels, all_preds_combined, average='weighted', zero_division=0
+    )
 
-    # Lists to store metrics for plotting
-    train_losses = []
-    train_accuracies = []
-    val_losses = []
-    val_accuracies = []
-    precisions = []
-    recalls = []
-    f1_scores = []
-
-    for epoch in range(num_epochs):  # Fixed epochs to 10
-        print(f'Epoch {epoch + 1}/{num_epochs}')
-        print('-' * 10)
-
-        # Training phase
-        epoch_loss_combined, epoch_acc_combined = train_one_epoch(
-            model, trainloader, criterion, optimizer
-        )
-
-        train_losses.append(epoch_loss_combined)
-        train_accuracies.append(epoch_acc_combined)
-
-        print(f'Training Combined Loss: {epoch_loss_combined:.4f} '
-                f'Acc: {epoch_acc_combined:.4f}')
-
-        # Validation phase
-        val_loss_combined, val_acc_combined, precision, recall, f1 = validate(
-            model, valloader, criterion
-        )
-
-        val_losses.append(val_loss_combined)
-        val_accuracies.append(val_acc_combined)
-        precisions.append(precision)
-        recalls.append(recall)
-        f1_scores.append(f1)
-
-        print(f'Validation Combined Loss: {val_loss_combined:.4f} '
-                f'Acc: {val_acc_combined:.4f}')
-        print(f'Validation Precision: {precision:.4f}, '
-                f'Recall: {recall:.4f}, F1-score: {f1:.4f}')
-
-        # Early stopping
-        if val_loss_combined < best_val_loss:
-            best_val_loss = val_loss_combined
-            epochs_no_improve = 0
-            # Save the best model based on validation loss
-            print(f"New best model found! Saving model with validation "
-                    f"loss: {best_val_loss:.4f}")
-            torch.save(model.state_dict(), 'best_model.pth')
-        else:
-            epochs_no_improve += 1
-            if epochs_no_improve >= early_stopping_patience:
-                print(f'Early stopping at epoch {epoch + 1}')
-                break
-
-    # Plotting results
-    filename = "/home/shaakira.gadiwan/assignment2/metrics_plot1.png"
-    plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, precisions, recalls, f1_scores, filename)
-
-    return best_val_loss
+    return precision, recall, f1
 
 def plot_training_results(train_losses, val_losses, train_accuracies, val_accuracies, precisions, recalls, f1_scores, filename):
-
-    print("Train Losses:", train_losses)
-    print("Validation Losses:", val_losses)
-    print("Train Accuracies:", train_accuracies)
-    print("Validation Accuracies:", val_accuracies)
-    print("Precisions:", precisions)
-    print("Recalls:", recalls)
-    print("F1 Scores:", f1_scores)
-
     # Convert list of tensors to NumPy arrays if they are on GPU
     train_losses = [loss.detach().cpu().numpy() if isinstance(loss, torch.Tensor) else loss for loss in train_losses]
     val_losses = [loss.detach().cpu().numpy() if isinstance(loss, torch.Tensor) else loss for loss in val_losses]
@@ -453,17 +565,8 @@ def plot_training_results(train_losses, val_losses, train_accuracies, val_accura
 
     epochs = range(1, len(train_losses) + 1)
 
-    print("Epochs:", epochs)
-    print("Train Losses:", train_losses)
-    print("Validation Losses:", val_losses)
-    print("Train Accuracies:", train_accuracies)
-    print("Validation Accuracies:", val_accuracies)
-    print("Precisions:", precisions)
-    print("Recalls:", recalls)
-    print("F1 Scores:", f1_scores)
-
     # Check epochs and convert to list if it's a range object
-    epochs = list(epochs)  # Converts range to list of epoch numbers if necessary
+    epochs = list(epochs)  
 
     # Plot Loss
     plt.figure(figsize=(12, 8))
@@ -504,159 +607,6 @@ def plot_training_results(train_losses, val_losses, train_accuracies, val_accura
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
-
-def compute_class_weights(trainset_df):
-    # Compute class weights
-    class_labels = np.unique(trainset_df['label'])
-    class_weights = compute_class_weight(
-        'balanced',
-        classes=class_labels,
-        y=trainset_df['label']
-    )
-    # Create a mapping from class labels to weights
-    class_weights_dict = {label: weight for label, weight in zip(class_labels, class_weights)}
-    
-    # Map the class weights to the class indices
-    class_weights_list = [class_weights_dict[class_name] for class_name in class_names]
-    class_weights_tensor = torch.tensor(class_weights_list, dtype=torch.float).to(device)
-
-    return class_weights_tensor
-
-def data_preprocessing():
-    # Extract the data
-    trainset_df = extract_data_from_folders(TRAINSET_DIR)
-    valset_df = extract_data_from_folders(VALSET_DIR)
-    testset_df = extract_data_from_folders(TESTSET_DIR)
-
-    class_weights_tensor = compute_class_weights(trainset_df)
-
-    # Initialize the BERT tokenizer
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
-    # Image transformations
-    transform_train = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
-    ])
-
-    # Create datasets
-    trainset = GarbageDataset(
-        trainset_df,
-        image_transform=transform_train,
-        class_to_idx=class_to_idx,
-        tokenizer=tokenizer,
-        max_len=32
-    )
-    valset = GarbageDataset(
-        valset_df,
-        image_transform=transform_train,
-        class_to_idx=class_to_idx,
-        tokenizer=tokenizer,
-        max_len=32
-    )    
-    testset = GarbageDataset(
-        testset_df,
-        image_transform=transform_test,
-        class_to_idx=class_to_idx,
-        tokenizer=tokenizer,
-        max_len=32
-    )
-
-    # DataLoaders
-    trainloader = DataLoader(
-        trainset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=2
-    )
-    valloader = DataLoader(
-        valset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=2
-    )
-    testloader = DataLoader(
-        testset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=2
-    )
-
-    return trainloader, valloader, testloader, class_weights_tensor
-
-def plot_conf_mat(conf_mat):
-    # Confusion matrix for test set
-    fig, ax = plt.subplots(figsize=(6, 6))
-    sns.heatmap(
-        conf_mat,
-        annot=True,
-        fmt='d',
-        cmap='Blues',
-        xticklabels=class_names,
-        yticklabels=class_names
-    )
-    plt.ylabel('Actual')
-    plt.xlabel('Predicted')
-    plt.title('Test Confusion Matrix')
-    plt.savefig('/home/shaakira.gadiwan/assignment2/confusion_matrix.png') 
-    plt.close(fig)
-
-
-def compute_metrics(all_labels, all_preds_combined):
-     # Compute additional metrics
-    precision = precision_score(
-        all_labels, all_preds_combined, average='weighted', zero_division=0
-    )
-    recall = recall_score(
-        all_labels, all_preds_combined, average='weighted', zero_division=0
-    )
-    f1 = f1_score(
-        all_labels, all_preds_combined, average='weighted', zero_division=0
-    )
-
-    return precision, recall, f1
-
-def plot_test_metrics(test_acc_combined, test_precision, test_recall, test_f1, filename='test_results.png'):
-
-    # Convert each metric if they are tensors on the GPU
-    metrics = [test_acc_combined, test_precision, test_recall, test_f1]
-    test_acc_combined, test_precision, test_recall, test_f1 = [
-        metric.detach().cpu().numpy() if isinstance(metric, torch.Tensor) else metric 
-        for metric in metrics
-    ]
-
-
-    # Create a new figure
-    plt.figure(figsize=(8, 6))
-
-    # Plot Test Metrics
-    plt.bar(['Accuracy', 'Precision', 'Recall', 'F1 Score'], 
-            [test_acc_combined, test_precision, test_recall, test_f1], color='skyblue')
-    plt.ylim(0, 1)  # Set y-axis limits for better visibility
-    plt.title('Test Metrics')
-    plt.ylabel('Score')
-
-    plt.tight_layout()
-    
-    # Save the figure instead of showing it
-    plt.savefig(filename)  # Save as a PNG file (default)
-    plt.close()  # Close the figure to free up memory
-
 
 # ---------------------------
 # Main Function
