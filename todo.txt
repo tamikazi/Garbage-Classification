@@ -1,3 +1,3 @@
 Run jupyter notebook
-In jupyter notebook, change image filename directories so that it saves in /src/images, or so that it shows in the output
-Clean up github, save wandb tooling in tools, update readme on how to run
+In jupyter notebook, change image filename directories so that it saves in /src/images, or so that it shows in the output with plt.show if possible
+Clean up github, save wandb tooling in tools, update readme on how to run 
