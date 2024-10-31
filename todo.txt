@@ -1,0 +1,4 @@
+1. Run jupyter notebook
+2. In jupyter notebook, output the time it takes to run the training, validation, and test
+3. In jupyter notebook, change image filename directories so that it saves in /src/images
+4. Clean up github, save wandb tooling in tools, update readme on how to run
