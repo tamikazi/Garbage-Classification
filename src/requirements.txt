@@ -1,9 +1,9 @@
 numpy
 pandas
-matplotlib
 Pillow
-torch==2.0.1
-torchvision==0.15.2
-transformers==4.34.0
-scikit-learn
-wandb
+matplotlib
+seaborn
+torch==2.0.0
+torchvision==0.15.0
+transformers==4.30.0
+scikit-learn==1.2.0
