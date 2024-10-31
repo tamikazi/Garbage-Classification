@@ -971,7 +971,7 @@ def main():
     best_val_loss = train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, 20, filename_metrics_plot)
 
     # Load the best model after first phase of training
-    model.load_state_dict(torch.load('best_model.pth'))
+    model.load_state_dict(torch.load('best_model.pth'), weights_only=True)
 
     # Freeze and unfreeze layers for further training
     for param in model.image_model.model.parameters():
@@ -1006,7 +1006,7 @@ def main():
     best_val_loss = train_validate_model(model, trainloader, valloader, criterion, trainable_params, best_val_loss, 5, filename_metrics_plot_fine_tuning)
 
     # Load the best model after the second phase of training
-    model.load_state_dict(torch.load('best_model.pth'))
+    model.load_state_dict(torch.load('best_model.pth'), weights_only=True)
 
     # Evaluate the model on the test set
     test_acc_combined, precision, recall, f1, conf_mat = test(model, testloader)
