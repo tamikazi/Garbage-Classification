@@ -2,7 +2,6 @@
 
 import os
 import re
-import random
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -16,7 +15,7 @@ import torch.optim as optim
 
 import torchvision
 from torchvision import transforms, models
-from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import ResNet50_Weights
 
 from transformers import BertTokenizer, BertModel
 from sklearn.utils.class_weight import compute_class_weight
