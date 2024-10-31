@@ -800,7 +800,7 @@ def train_validate_model(model, trainloader, valloader, criterion, trainable_par
     f1_scores = []
 
     # Learning rate scheduler to reduce the learning rate after a certain number of epochs
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
 
     # Loop through the specified number of epochs for training and validation
     for epoch in range(num_epochs): 
