@@ -34,9 +34,9 @@ print(f'Using device: {device}')
 """# Static Global Variables"""
 
 # hyperparameters
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 LEARNING_RATE = 0.0001
-DROPOUT_RATE = 0.2
+DROPOUT_RATE = 0.3
 
 # dataset directories
 TRAINSET_DIR = '/work/TALC/enel645_2024f/garbage_data/CVPR_2024_dataset_Train'
