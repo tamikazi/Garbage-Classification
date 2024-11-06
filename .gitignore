@@ -2,3 +2,4 @@ data/
 .vscode/settings.json
 wandb/
 .pth
+models/
