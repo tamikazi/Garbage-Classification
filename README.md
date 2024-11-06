@@ -4,7 +4,18 @@
 The main program, found in /src/multimodal-garbage-classifier.ipynb, sets up a training and testing pipeline for a text- and image-based multimodal model that classifies garbage images into four categories ('Green', 'Blue', 'Black', 'TTR') based on the [City of Calgary guidelines](https://www.calgary.ca/waste/what-goes-where/default.html). 
 
 ### How to run the main program:
-- ...
+1. **Create and activate the Conda environment**:  
+   ```bash
+   conda create -n myenv --file requirements.txt
+   conda activate myenv
+
+2. **Install Jupyter in the environment**:
+    ```bash
+    conda install jupyter
+    
+3. **Run Jupyter Notebook**:  
+    ```bash
+    jupyter notebook
 
 ---
 
@@ -36,12 +47,7 @@ Functions track and visualize model performance:
 ---
 
 ## Weights and Biases (WandB) Tooling Program
-A useful tool, found in /tool/wandb-garbage-classifier.py, that leverages [Weights & Biases](https://wandb.ai/site/) for hyperparameter tuning through sweeps, aimed at identifying the optimal hyperparameters to enhance model performance.
-
-### How to run the tooling program:
-- ...
-
----
+A useful program, found in /tools/wandb-garbage-classifier.py, that leverages [Weights & Biases](https://wandb.ai/site/) for hyperparameter tuning through sweeps, aimed at identifying the optimal hyperparameters to enhance model performance.
 
 ### WandB Sweep Configuration
 
@@ -55,6 +61,3 @@ Define hyperparameters to sweep such as:
    - `dropout_rate`: Probability of dropping neurons to prevent overfitting.
 
 A desired min and max sweep value can be set for each hyperparameter. 
-
-
-
