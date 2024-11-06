@@ -1,8 +1,0 @@
-1. Run jupyter notebook, steps:
--activate env in talc
--open http://talc.ucalgary.ca and sign in with UCalgary credentials
--in talc terminal, run conda install jupyter, then python -m ipykernel install --user --name=myenv --display-name "Python (myenv)"
--in the jupyter notebook on browser, select the environment as the kernel for the notebook by going to Kernel > Change Kernel > Python (myenv)
--run each cell manually
-
-2. Clean up github, save wandb tooling in tools, update readme on how to run 
